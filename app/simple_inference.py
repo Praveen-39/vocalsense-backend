@@ -156,11 +156,50 @@ def run_inference(audio_bytes: bytes, sample_rate: int = None):
     print(f"Processing audio: {len(audio_bytes)} bytes")
     
     try:
-        # Load audio
-        print("Loading audio with librosa...")
+        # Load audio - ROBUST METHOD using pydub
+        print("Loading audio with pydub (ffmpeg wrapper)...")
         try:
+            from pydub import AudioSegment
+            import tempfile
+            import os
+            
+            # Save input bytes to temp file
+            with tempfile.NamedTemporaryFile(delete=False) as tmp_in:
+                tmp_in.write(audio_bytes)
+                tmp_in_path = tmp_in.name
+            
+            # Convert to WAV using pydub (uses ffmpeg)
+            try:
+                # Try loading as any format (pydub auto-detects)
+                audio_segment = AudioSegment.from_file(tmp_in_path)
+                
+                # Export as WAV to new temp file
+                with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp_out:
+                    tmp_out_path = tmp_out.name
+                    
+                audio_segment.export(tmp_out_path, format="wav")
+                
+                # Now load the clean WAV with librosa
+                audio_data, sr = librosa.load(tmp_out_path, sr=None)
+                print(f"✓ Audio loaded via pydub: {len(audio_data)} samples, {sr}Hz")
+                
+                # Cleanup
+                try:
+                    os.unlink(tmp_in_path)
+                    os.unlink(tmp_out_path)
+                except:
+                    pass
+                    
+            except Exception as e:
+                print(f"Pydub conversion failed: {e}")
+                # Fallback to direct librosa load
+                print("Falling back to direct librosa load...")
+                audio_data, sr = librosa.load(io.BytesIO(audio_bytes), sr=None)
+                
+        except ImportError:
+            print("Pydub not installed, using direct librosa load")
             audio_data, sr = librosa.load(io.BytesIO(audio_bytes), sr=None)
-            print(f"✓ Audio loaded: {len(audio_data)} samples, {sr}Hz, {len(audio_data)/sr:.2f}s")
+            
         except Exception as e:
             print(f"ERROR loading audio: {e}")
             import traceback
