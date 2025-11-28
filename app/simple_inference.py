@@ -8,6 +8,15 @@ import librosa
 import warnings
 warnings.filterwarnings('ignore')
 
+# Download NLTK data if needed
+try:
+    import nltk
+    nltk.download('punkt', quiet=True)
+    nltk.download('averaged_perceptron_tagger', quiet=True)
+    nltk.download('brown', quiet=True)
+except:
+    pass
+
 def extract_audio_features(audio_data, sr):
     """Extract basic acoustic features"""
     features = {}
@@ -46,10 +55,22 @@ def simple_transcribe(audio_data, sr):
         
         try:
             recognizer = sr_lib.Recognizer()
+            # Adjust for ambient noise
             with sr_lib.AudioFile(tmp_path) as source:
+                recognizer.adjust_for_ambient_noise(source, duration=0.5)
                 audio = recognizer.record(source)
+                
+            # Try Google Speech Recognition
+            try:
                 text = recognizer.recognize_google(audio)
                 return text
+            except sr_lib.UnknownValueError:
+                print("Google Speech Recognition could not understand audio")
+                return "Audio unclear - could not transcribe"
+            except sr_lib.RequestError as e:
+                print(f"Could not request results from Google Speech Recognition; {e}")
+                return "Transcription service unavailable"
+                
         finally:
             try:
                 os.unlink(tmp_path)
@@ -58,6 +79,8 @@ def simple_transcribe(audio_data, sr):
                 
     except Exception as e:
         print(f"Transcription error: {e}")
+        import traceback
+        traceback.print_exc()
         return "Could not transcribe audio"
 
 def simple_emotion_detection(text, audio_features):
@@ -147,9 +170,10 @@ def run_inference(audio_bytes: bytes, sample_rate: int = None):
         transcript = simple_transcribe(audio_data, sr)
         print(f"✓ Transcript: '{transcript}'")
         
-        if not transcript or len(transcript) < 3:
-            transcript = "Unable to transcribe audio"
-            return "neutral", 0.5, False, 0.0, transcript
+        # Continue even if transcription failed
+        if not transcript or len(transcript) < 3 or "could not transcribe" in transcript.lower():
+            print("Warning: Transcription failed, using fallback text")
+            transcript = "Audio sample"  # Fallback text for emotion detection
         
         # 2. Extract features
         print("Step 2/4: Extracting audio features...")
