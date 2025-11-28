@@ -1,0 +1,14 @@
+fastapi
+uvicorn
+python-multipart
+torch
+torchaudio
+transformers
+librosa
+numpy
+scipy
+soundfile
+openai-whisper
+speechbrain
+textblob
+nltk
